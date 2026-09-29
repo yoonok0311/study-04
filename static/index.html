@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<!-- Created: 2026-09-29 11:59 -->
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>냉장고 재료 인식</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="container">
+    <header>
+      <h1>냉장고 재료 인식</h1>
+      <p class="subtitle">냉장고 사진을 올리면 AI가 안에 든 재료를 찾아 줍니다.</p>
+    </header>
+
+    <!-- 1. 사진 올리기 -->
+    <section class="card" id="upload-section">
+      <div class="dropzone" id="dropzone">
+        <img id="preview" alt="올린 냉장고 사진 미리보기" hidden>
+        <div id="dropzone-empty">
+          <p class="dropzone-title">사진을 여기에 끌어다 놓거나</p>
+          <div class="button-row">
+            <button type="button" class="btn" id="pick-button">사진 선택</button>
+            <button type="button" class="btn" id="camera-button">카메라로 찍기</button>
+          </div>
+          <p class="hint">JPG, PNG, WEBP · 최대 20MB</p>
+        </div>
+      </div>
+      <input type="file" id="file-input" accept="image/jpeg,image/png,image/webp" hidden>
+      <input type="file" id="camera-input" accept="image/*" capture="environment" hidden>
+
+      <div class="button-row" id="photo-actions" hidden>
+        <button type="button" class="btn primary" id="recognize-button">재료 인식하기</button>
+        <button type="button" class="btn" id="change-button">다른 사진</button>
+      </div>
+
+      <p class="privacy">사진은 외부 AI 서비스(OpenRouter)로 전송됩니다. 사람이나 개인정보가 찍히지 않게 해 주세요.</p>
+    </section>
+
+    <!-- 2. 진행 상태 -->
+    <section class="card status" id="progress" hidden>
+      <div class="spinner" aria-hidden="true"></div>
+      <p id="progress-text" role="status">재료를 인식하는 중…</p>
+      <button type="button" class="btn" id="cancel-button">취소</button>
+    </section>
+
+    <p class="card error" id="error" role="alert" hidden></p>
+
+    <!-- 3. 인식 결과 편집 -->
+    <section class="card" id="result-section" hidden>
+      <div class="result-header">
+        <h2>찾은 재료 <span class="count" id="ingredient-count"></span></h2>
+        <span class="meta" id="result-meta"></span>
+      </div>
+      <p class="notes" id="notes" hidden></p>
+      <p class="empty" id="empty-message" hidden>재료를 찾지 못했습니다. 더 밝게 찍거나 직접 추가해 주세요.</p>
+      <div id="groups"></div>
+
+      <form class="add-form" id="add-form">
+        <input type="text" id="add-name" placeholder="재료 이름 (예: 고추장)" maxlength="30" required>
+        <input type="text" id="add-quantity" placeholder="양 (선택)" maxlength="30">
+        <select id="add-category" aria-label="분류"></select>
+        <button type="submit" class="btn">추가</button>
+      </form>
+
+      <button type="button" class="btn primary wide" id="next-button">이 재료로 레시피 만들기</button>
+      <pre class="handoff" id="handoff" hidden></pre>
+    </section>
+  </main>
+
+  <template id="ingredient-template">
+    <li class="ingredient">
+      <div class="name-cell">
+        <input type="text" class="name" maxlength="30" aria-label="재료 이름">
+        <span class="name-en"></span>
+      </div>
+      <input type="text" class="quantity" maxlength="30" placeholder="양" aria-label="양">
+      <span class="badge"></span>
+      <button type="button" class="delete" aria-label="삭제">×</button>
+    </li>
+  </template>
+
+  <script src="app.js"></script>
+</body>
+</html>
