@@ -253,8 +253,7 @@ function init() {
 
   restore();
   render();
-  // 페이지를 열 때 서버를 미리 찾아, 꺼져 있으면 바로 알려 줌
-  Api.find().then((found) => { if (!found) showError(Api.NO_SERVER); });
+  Api.watch(); // 서버를 찾을 때까지 조용히 다시 찾음
 }
 
 init();

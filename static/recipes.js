@@ -261,7 +261,7 @@ function init() {
   });
 
   render();
-  Api.find().then((found) => { if (!found) showError(Api.NO_SERVER); });
+  Api.watch(); // 서버를 찾을 때까지 조용히 다시 찾음
 }
 
 init();
