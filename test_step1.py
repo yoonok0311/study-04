@@ -12,6 +12,7 @@ from pathlib import Path
 from PIL import Image
 
 import app as server
+import ingredients
 from openrouter import OpenRouterError, extract_json
 
 SAMPLES = Path(__file__).resolve().parent / "samples"
@@ -43,7 +44,7 @@ def fake_chat(*replies):
     """chat_events 대신 쓸 가짜: 부를 때마다 replies를 차례로 돌려줌 (예외면 raise)."""
     calls = []
 
-    def events(model, content, max_tokens=300, timeout=120):
+    def events(model, content, max_tokens=300, timeout=120, waits=(), extra=None):
         reply = replies[len(calls)]
         calls.append(max_tokens)
         if isinstance(reply, Exception):
@@ -64,11 +65,18 @@ def offline_tests():
     status, body = post(b"\xff" * (server.MAX_IMAGE_BYTES + 1))
     check("5MB 초과 → 400/413", status in (400, 413) and body["code"] == "bad_image", str(status))
     check("index.html 제공", client.get("/").status_code == 200)
+    health = client.get("/api/health", headers={"Origin": "null"})
+    check("/api/health + file:// 허용", health.get_json()["ok"]
+          and health.headers.get("Access-Control-Allow-Origin") == "null")
+    check("Live Server(5500) 출처 허용", client.get("/api/health", headers={"Origin": "http://127.0.0.1:5500"})
+          .headers.get("Access-Control-Allow-Origin") == "http://127.0.0.1:5500")
+    check("외부 사이트 출처는 거부", "Access-Control-Allow-Origin" not in
+          client.get("/api/health", headers={"Origin": "https://evil.example"}).headers)
 
     print("[응답 해석]")
     check("```json 코드 블록", extract_json('설명\n```json\n{"a": 1}\n```')["a"] == 1)
     check("앞뒤에 설명이 붙은 JSON", extract_json('결과: {"a": {"b": 2}} 끝')["a"]["b"] == 2)
-    result = server.normalize({"ingredients": [
+    result = ingredients.normalize({"ingredients": [
         {"name": "달걀", "quantity": "", "category": "유제품/달걀", "confidence": "low"},
         {"name": "달 걀", "quantity": "6개", "category": "유제품/달걀", "confidence": "high"},
         {"name": "밀폐 용기", "category": "기타", "confidence": "high"},
@@ -84,20 +92,26 @@ def offline_tests():
           any(i["name"] == "우유" and i["category"] == "기타" and i["confidence"] == "medium"
               for i in result["ingredients"]))
     check("빈 이름 빼기, 잘못된 notes → 빈 문자열", len(names) == 2 and result["notes"] == "")
-    suspect = {n: server.is_suspect_name(n, e) for n, e in [
+    suspect = {n: ingredients.is_suspect_name(n, e) for n, e in [
         ("달/year", "egg"), ("메이onnaise", "mayonnaise"), ("파인플루트", "pineapple"), ("메추라 알", "quail eggs"),
         ("양상추", "lettuce"), ("계란", "eggs"), ("다진 마늘", "garlic"), ("페스토 / 그린 소스", "pesto"), ("두부", "")]}
     check("깨진 이름 → 확인 필요", all(suspect[n] for n in ("달/year", "메이onnaise", "파인플루트", "메추라 알")), str(suspect))
     check("정상 이름은 그대로", not any(suspect[n] for n in ("양상추", "계란", "다진 마늘", "페스토 / 그린 소스", "두부")),
           str(suspect))
-    item = server.normalize({"ingredients": [{"name": "달/year", "name_en": "Egg", "category": "유제품/달걀",
+    item = ingredients.normalize({"ingredients": [{"name": "메이onnaise", "name_en": "Mayonnaise", "category": "양념/소스",
                                               "confidence": "high"}]})["ingredients"][0]
-    check("normalize가 name_en(소문자)과 name_suspect를 채움", item["name_en"] == "egg" and item["name_suspect"] is True)
-    check("비슷한 분류 맞추기", [server.normalize_category(c) for c in ("유제품", "소스", "음료", None)]
+    check("normalize가 name_en(소문자)과 name_suspect를 채움", item["name_en"] == "mayonnaise" and item["name_suspect"] is True)
+    fixed = ingredients.normalize({"ingredients": [{"name": "달_eggs_", "name_en": "egg", "category": "유제품/달걀"}],
+                                   "notes": "달 Goose가 있습니다"})
+    check("깨진 달걀은 자동 복구 (표시 없음)", fixed["ingredients"][0]["name"] == "달걀"
+          and not fixed["ingredients"][0]["name_suspect"] and fixed["notes"] == "달걀가 있습니다", str(fixed))
+    check("정상 단어는 그대로", [ingredients.repair_korean(t) for t in ("달콤한 소스", "보름달 떡")] == ["달콤한 소스", "보름달 떡"])
+    check("비슷한 분류 맞추기", [ingredients.normalize_category(c) for c in ("유제품", "소스", "음료", None)]
           == ["유제품/달걀", "양념/소스", "음료", "기타"])
 
     print("[오류 처리 (가짜 모델 응답)]")
-    original = server.chat_events
+    original, original_models = server.chat_events, server.IMAGE_MODELS
+    server.IMAGE_MODELS = ["fake/model"]
     good = json.dumps({"ingredients": [{"name": "당근", "quantity": "2개", "category": "채소",
                                          "confidence": "high"}], "notes": ""}, ensure_ascii=False)
     try:
@@ -129,8 +143,19 @@ def offline_tests():
         server.chat_events, _ = fake_chat(OpenRouterError("upstream_error", "HTTP 500: secret detail"))
         status, events = post(image_bytes(size=(13, 13)))
         check("그 밖의 오류 → upstream_error", events[-1].get("code") == "upstream_error")
+
+        server.IMAGE_MODELS = ["fake/first:free", "fake/second:free"]
+        server.chat_events, calls = fake_chat(OpenRouterError("rate_limited", "HTTP 429"), good)
+        status, events = post(image_bytes(size=(15, 15)))
+        check("첫 모델 429 → 다음 모델로 전환해 성공", events[-1]["type"] == "result"
+              and events[-1]["model"] == "fake/second:free"
+              and any("second" in e.get("message", "") for e in events), str(events))
+        server.chat_events, calls = fake_chat(OpenRouterError("rate_limited", "HTTP 429"),
+                                              OpenRouterError("rate_limited", "HTTP 429"))
+        status, events = post(image_bytes(size=(16, 16)))
+        check("모든 모델 실패 → 마지막 오류", events[-1].get("code") == "rate_limited" and len(calls) == 2)
     finally:
-        server.chat_events = original
+        server.chat_events, server.IMAGE_MODELS = original, original_models
         server._cache.clear()
 
 
@@ -144,7 +169,7 @@ def resize_like_browser(path):
 
 
 def live_tests():
-    print(f"[실제 모델: {server.IMAGE_MODEL}]")
+    print(f"[실제 모델 (순서대로): {', '.join(server.IMAGE_MODELS)}]")
     for path in sorted(SAMPLES.glob("*.jpg")):
         status, events = post(resize_like_browser(path), path.name)
         for event in events:

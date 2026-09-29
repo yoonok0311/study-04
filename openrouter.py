@@ -43,14 +43,16 @@ def _post(body, timeout):
     return 200, data
 
 
-def chat_events(model, content, max_tokens=300, timeout=120):
+def chat_events(model, content, max_tokens=300, timeout=120, waits=RETRY_WAITS, extra=None):
     """진행 상황을 이벤트로 내보내는 제너레이터.
 
     ("retry", {"attempt", "max", "wait", "code"})를 0번 이상 내보낸 뒤
     ("done", {"content", "usage", "finish_reason"})로 끝남. 실패하면 OpenRouterError.
+    waits: 재시도 사이 대기 초 목록 (대체 모델이 있으면 짧게 줘서 빨리 넘어감)
+    extra: 요청 본문에 더할 필드 (예: {"reasoning": {"enabled": False}})
     """
-    body = {"model": model, "messages": [{"role": "user", "content": content}], "max_tokens": max_tokens}
-    for attempt in range(len(RETRY_WAITS) + 1):
+    body = {"model": model, "messages": [{"role": "user", "content": content}], "max_tokens": max_tokens, **(extra or {})}
+    for attempt in range(len(waits) + 1):
         code, payload = _post(body, timeout)
         if code == 200:
             choice = payload["choices"][0]
@@ -61,9 +63,9 @@ def chat_events(model, content, max_tokens=300, timeout=120):
             yield "done", {"content": text, "usage": payload.get("usage", {}),
                            "finish_reason": choice.get("finish_reason")}
             return
-        if code in RETRY_CODES and attempt < len(RETRY_WAITS):
-            wait = RETRY_WAITS[attempt]
-            yield "retry", {"attempt": attempt + 1, "max": len(RETRY_WAITS), "wait": wait, "code": code}
+        if code in RETRY_CODES and attempt < len(waits):
+            wait = waits[attempt]
+            yield "retry", {"attempt": attempt + 1, "max": len(waits), "wait": wait, "code": code}
             time.sleep(wait)
             continue
         if code == 429:
@@ -71,10 +73,10 @@ def chat_events(model, content, max_tokens=300, timeout=120):
         raise OpenRouterError("upstream_error", f"HTTP {code}: {payload}")
 
 
-def chat(model, content, max_tokens=300, timeout=120, on_retry=None):
+def chat(model, content, max_tokens=300, timeout=120, on_retry=None, waits=RETRY_WAITS):
     """chat_events를 끝까지 돌려 (content, usage, 걸린 초)를 돌려줌."""
     start = time.perf_counter()
-    for kind, info in chat_events(model, content, max_tokens, timeout):
+    for kind, info in chat_events(model, content, max_tokens, timeout, waits):
         if kind == "retry" and on_retry:
             on_retry(info)
         elif kind == "done":

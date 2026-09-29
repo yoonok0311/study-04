@@ -6,20 +6,25 @@
 
 ## 프로젝트 개요
 
-VibeCoding 학습 시리즈의 Study-04입니다 (다른 프로젝트: `../study-01` MNIST 숫자 인식기, `../study-02` 웹 할 일 앱, `../study-03` 한국어 퀴즈 웹 게임). 냉장고 사진에서 재료를 인식하고 레시피를 추천하는 웹 앱을 `PRD_step1.md`(재료 인식), `PRD_step2.md`(레시피 생성), `PRD_step3.md`(프로필과 저장) 순서로 만들고 있습니다. 현재 1단계까지 구현되어 있습니다.
+VibeCoding 학습 시리즈의 Study-04입니다 (다른 프로젝트: `../study-01` MNIST 숫자 인식기, `../study-02` 웹 할 일 앱, `../study-03` 한국어 퀴즈 웹 게임). 냉장고 사진에서 재료를 인식하고 레시피를 추천하는 웹 앱을 `PRD_step1.md`(재료 인식), `PRD_step2.md`(레시피 생성), `PRD_step3.md`(프로필과 저장) 순서로 만들고 있습니다. 현재 2단계까지 구현되어 있습니다.
 
 ## 실행과 테스트
 
-- `py app.py`: Flask 서버를 `http://127.0.0.1:5000`에 띄웁니다 (의존성: `flask`, `Pillow`). 모델은 환경 변수 `IMAGE_MODEL`, 포트는 `PORT`로 바꿉니다. 예: `PORT=5001 IMAGE_MODEL=dots-studio/dots-3-note-preview:free py app.py`. 자동 재시작이 없으므로 코드를 고치면 서버를 다시 켭니다.
+- `py app.py`: Flask 서버를 `http://127.0.0.1:5000`에 띄웁니다 (의존성: `flask`, `Pillow`). 재료 인식 모델은 `IMAGE_MODELS`(쉼표로 구분, 앞에서부터 시도)로 바꾸고 기본값은 `google/gemma-4-31b-it:free,dots-studio/dots-3-note-preview:free`입니다. 앞 모델은 5초 한 번만 재시도하고 다음 모델로 넘어갑니다. `IMAGE_MODEL`(모델 하나)도 받습니다. 포트는 `PORT`로 바꿉니다. 자동 재시작이 없으므로 코드를 고치면 서버를 다시 켭니다.
+- `py test_step2.py`: 2단계 서버 테스트 (가짜 모델 응답으로 조건 필터, 재요청, 모델 전환, 캐시 검사). `--live`는 실제 레시피 생성.
 - `py test_step1.py`: API를 부르지 않는 서버 테스트 (가짜 `chat_events`로 오류 흐름 검사). `--live`를 붙이면 `samples/`의 사진 3장으로 실제 모델을 부릅니다 (무료 호출 한도 사용).
 - 콘솔 한글이 깨지면 `PYTHONIOENCODING=utf-8`을 붙입니다.
 
 ## 구조
 
 - `openrouter.py`: 모든 OpenRouter 호출의 공통 모듈. `chat_events()`는 재시도 진행을 `("retry", …)` 이벤트로 내보내는 제너레이터이고, `chat()`은 이를 끝까지 돌리는 래퍼입니다. 재시도를 다 써도 실패하면 `OpenRouterError(kind=rate_limited|upstream_error|empty)`를 냅니다. `extract_json()`은 코드 블록이나 앞뒤 설명이 붙은 응답에서 JSON을 뽑습니다.
-- `app.py`: `POST /api/ingredients`는 결과를 한 번에 주지 않고 NDJSON(`application/x-ndjson`)으로 흘려보냅니다. `retry`/`status` 줄이 0개 이상 오고 마지막 줄이 `result` 또는 `error`입니다. 재시도가 최대 약 3분 걸려서 화면에 진행 상황을 보여 주기 위함입니다. 업로드 검증 실패만 일반 JSON 400으로 돌려줍니다. 인식 결과는 이미지 sha256으로 메모리에 캐시합니다.
+- `app.py`: `POST /api/ingredients`는 결과를 한 번에 주지 않고 NDJSON(`application/x-ndjson`)으로 흘려보냅니다. `retry`/`status` 줄이 0개 이상 오고 마지막 줄이 `result` 또는 `error`입니다. 재시도가 최대 약 3분 걸려서 화면에 진행 상황을 보여 주기 위함입니다. 업로드 검증 실패만 일반 JSON 400으로 돌려줍니다. `GET /api/health`는 화면이 서버를 찾는 데 씁니다. `index.html`을 파일(`file://`)이나 Live Server 같은 다른 로컬 포트로 열어도 되도록, 로컬 출처(`null`, `127.0.0.1`, `localhost`)에만 CORS를 허용합니다. 인식 결과는 이미지 sha256으로 메모리에 캐시합니다.
 - 모델 응답은 `normalize()`로 정리합니다: 중복 합치기, 음식 아닌 물건 빼기, 목록에 없는 분류는 `normalize_category()`로 비슷한 분류에 맞추기. dots-3가 한글 이름을 자주 깨뜨려서(예: `달/year`, `파인플루트`) 영어 이름 `name_en`도 받고, `is_suspect_name()`이 한글 외 문자가 섞였거나 `KNOWN_NAMES`의 영어→한글 대응과 어긋나면 `name_suspect: true`를 붙입니다. 화면은 이를 "확인 필요"와 영어 이름 힌트로 보여 주고, 사용자가 이름을 고치면 표시를 지웁니다. 형식이 틀리거나 빈 응답이면 1번 더 요청합니다 (빈 응답이면 `MAX_TOKENS`를 늘려서).
-- `static/`: 빌드 없는 HTML/CSS/JS. `app.js`가 보내기 전에 사진을 긴 변 1280px JPEG로 줄이고, 편집한 재료 목록을 `sessionStorage`(`fridge.step1`)에 둡니다. 2단계는 이 목록을 받아 씁니다. 원본 사진은 메모리에만 있어서 새로 고침하면 다시 인식할 수 없습니다.
+- `ingredients.py`(1단계)와 `recipes.py`(2단계)는 Flask와 무관한 순수 함수(프롬프트, 검증, 정리)이고, 모델 호출 흐름과 라우트는 `app.py`에 있습니다.
+- `POST /api/recipes`(2단계)도 NDJSON입니다. `recipe_events()`는 레시피를 받을 때마다 `recipes.annotate()`로 가진 재료(`have`)를 서버에서 다시 계산하고, `rejection_reason()`(피할 재료, 가진 재료만, 이미 추천한 이름)에 걸리면 버린 뒤 모자란 수만 다시 요청합니다 (최대 `RECIPE_CALLS`회). 재료 비교는 `same_ingredient()`: 공백과 괄호를 빼고, 한쪽이 다른 쪽을 포함하면 같은 재료로 봅니다. 한 글자 이름은 끝부분만 비교해서 "파"는 "대파"와는 같고 "파인애플"과는 다릅니다. 같은 요청은 30분 캐시합니다.
+- 레시피 요청은 `RECIPE_EXTRA`로 추론을 끕니다. dots-3는 추론을 켜면 100초 넘게 추론만 하다 빈 응답을 내고, 끄면 약 15초입니다. 모델은 `RECIPE_MODELS`(기본 dots-3 → nemotron) 순서로 시도합니다.
+- dots-3는 "달걀"을 거의 매번 `달/year`, `달 Goose`, `달_eggs_`처럼 깨뜨립니다. `ingredients.repair_korean()`이 이 패턴을 "달걀"로 고치고, 1단계 재료 이름과 메모, 2단계 레시피 글 전체에 적용됩니다. 그 밖의 영어 섞임(`pan에`)은 프롬프트로만 막고 있습니다.
+- `static/`: 빌드 없는 HTML/CSS/JS. `app.js`가 보내기 전에 사진을 긴 변 1280px JPEG로 줄이고, 편집한 재료 목록을 `sessionStorage`(`fridge.step1`)에 둡니다. `recipes.html`/`recipes.js`(2단계)가 이 목록을 읽고, 뺀 재료, 조건, 추천 결과를 `fridge.step2`에 둡니다. 1단계 목록이 바뀌면 2단계 상태는 초기화됩니다. 서버 찾기와 NDJSON 읽기는 두 페이지가 함께 쓰는 `common.js`의 `Api`에 있습니다. 원본 사진은 메모리에만 있어서 새로 고침하면 다시 인식할 수 없습니다.
 - `samples/`: 테스트 사진과 출처, 눈으로 센 정답 재료 목록(`SOURCES.md`).
 
 `study-04/`가 git 저장소 루트입니다 (기본 브랜치 `main`, 원격 `origin` = https://github.com/yoonok0311/study-04, 비공개). 사용자가 명시적으로 요청할 때만 커밋합니다. 린터와 빌드 단계는 없습니다. 공통 규칙(생성 시각 주석, `py` 런처)은 `C:\Users\DY\Desktop\CLAUDE.md`를 따릅니다.

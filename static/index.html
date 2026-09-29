@@ -4,14 +4,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>냉장고 재료 인식</title>
+  <title>냉장고 레시피 추천</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <main class="container">
     <header>
-      <h1>냉장고 재료 인식</h1>
-      <p class="subtitle">냉장고 사진을 올리면 AI가 안에 든 재료를 찾아 줍니다.</p>
+      <h1>냉장고 레시피 추천</h1>
+      <p class="subtitle">1. 냉장고 사진에서 재료 찾기 → 2. 레시피 추천받기</p>
     </header>
 
     <!-- 1. 사진 올리기 -->
@@ -19,7 +19,8 @@
       <div class="dropzone" id="dropzone">
         <img id="preview" alt="올린 냉장고 사진 미리보기" hidden>
         <div id="dropzone-empty">
-          <p class="dropzone-title">사진을 여기에 끌어다 놓거나</p>
+          <div class="dropzone-icon" aria-hidden="true">📷</div>
+          <p class="dropzone-title">냉장고 사진을 <strong>드래그</strong>하거나 아래 버튼으로 올려 주세요</p>
           <div class="button-row">
             <button type="button" class="btn" id="pick-button">사진 선택</button>
             <button type="button" class="btn" id="camera-button">카메라로 찍기</button>
@@ -65,7 +66,6 @@
       </form>
 
       <button type="button" class="btn primary wide" id="next-button">이 재료로 레시피 만들기</button>
-      <pre class="handoff" id="handoff" hidden></pre>
     </section>
   </main>
 
@@ -81,6 +81,7 @@
     </li>
   </template>
 
+  <script src="common.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

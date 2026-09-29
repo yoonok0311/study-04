@@ -7,10 +7,7 @@ const JPEG_QUALITY = 0.85;
 const THUMB_SIDE = 480;      // 새로 고침 뒤 미리보기 복원용 (sessionStorage 용량 절약)
 const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const CATEGORIES = ["채소", "과일", "육류", "해산물", "유제품/달걀", "가공식품", "양념/소스", "음료", "기타"];
-const STORAGE_KEY = "fridge.step1";
 const BADGES = { low: "확인 필요", user: "직접 추가" };
-
-const $ = (id) => document.getElementById(id);
 
 // 화면 상태. ingredients 항목: { name, name_en, name_suspect, quantity, category, confidence }
 // name_suspect: 서버가 한글 이름이 깨졌다고 본 재료 (예: "달/year"). 사용자가 이름을 고치면 false
@@ -22,19 +19,13 @@ let controller = null;       // 진행 중인 요청 취소용
 // ---------- 저장과 복원 ----------
 
 function save() {
-  try {
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch (e) {
-    // 용량 초과 등: 미리보기 없이라도 목록은 남김
-    try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ ...state, thumb: null })); } catch (_) {}
-  }
+  // 용량 초과 등으로 실패하면 미리보기 없이라도 목록은 남김
+  if (!saveStored(STEP1_KEY, state)) saveStored(STEP1_KEY, { ...state, thumb: null });
 }
 
 function restore() {
-  try {
-    const saved = JSON.parse(sessionStorage.getItem(STORAGE_KEY));
-    if (saved) state = { ...state, ...saved };
-  } catch (_) {}
+  const saved = loadStored(STEP1_KEY);
+  if (saved) state = { ...state, ...saved };
 }
 
 // ---------- 이미지 처리 ----------
@@ -101,47 +92,17 @@ async function recognize() {
   const form = new FormData();
   form.append("image", uploadBlob, "fridge.jpg");
   try {
-    const response = await fetch("/api/ingredients", { method: "POST", body: form, signal: controller.signal });
-    if (!response.ok) {
-      const body = await response.json().catch(() => ({}));
-      throw new Error(body.error || `서버 오류 (${response.status})`);
-    }
-    const result = await readEvents(response);
+    const result = await Api.stream("/api/ingredients", { method: "POST", body: form, signal: controller.signal },
+                                    (text) => setBusy(true, text));
     state = { ...state, ingredients: result.ingredients, notes: result.notes,
               model: result.model, elapsed: result.elapsed_sec, cached: !!result.cached };
     save();
   } catch (e) {
-    if (e.name === "AbortError") showError("인식을 취소했습니다.");
-    else showError(e.message || "서버에 연결할 수 없습니다. 서버가 켜져 있는지 확인해 주세요.");
+    showError(e.name === "AbortError" ? "인식을 취소했습니다." : e.message);
   } finally {
     controller = null;
     setBusy(false);
     render();
-  }
-}
-
-// 서버는 진행 상황을 한 줄에 JSON 하나씩(NDJSON) 보냄: retry/status 여러 번 → result 또는 error
-async function readEvents(response) {
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  for (;;) {
-    const { value, done } = await reader.read();
-    buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
-    const lines = buffer.split("\n");
-    buffer = lines.pop();
-    for (const line of lines) {
-      if (!line.trim()) continue;
-      const event = JSON.parse(line);
-      if (event.type === "result") return event;
-      if (event.type === "error") throw new Error(event.error);
-      if (event.type === "retry") {
-        setBusy(true, `사용자가 많아 다시 시도하는 중 (${event.attempt}/${event.max}) · ${event.wait}초 대기`);
-      } else if (event.type === "status") {
-        setBusy(true, event.message);
-      }
-    }
-    if (done) throw new Error("서버 응답이 중간에 끊겼습니다. 다시 시도해 주세요.");
   }
 }
 
@@ -153,15 +114,6 @@ function setBusy(busy, text) {
   for (const id of ["recognize-button", "change-button", "pick-button", "camera-button"]) {
     $(id).disabled = busy;
   }
-}
-
-function showError(message) {
-  $("error").textContent = message;
-  $("error").hidden = false;
-}
-
-function hideError() {
-  $("error").hidden = true;
 }
 
 function render() {
@@ -296,16 +248,13 @@ function init() {
     $("add-name").focus();
   });
 
-  // 2단계(레시피 생성)가 생기기 전까지는 넘길 데이터를 JSON으로 보여 줌
-  $("next-button").addEventListener("click", () => {
-    const handoff = { ingredients: state.ingredients.map(({ name, name_en, quantity, category }) =>
-      ({ name, name_en: name_en || "", quantity, category })) };
-    $("handoff").textContent = JSON.stringify(handoff, null, 2);
-    $("handoff").hidden = false;
-  });
+  // 편집한 재료 목록은 이미 sessionStorage(STEP1_KEY)에 있으므로 2단계 페이지로 넘어가기만 함 (F1-17)
+  $("next-button").addEventListener("click", () => { location.href = "recipes.html"; });
 
   restore();
   render();
+  // 페이지를 열 때 서버를 미리 찾아, 꺼져 있으면 바로 알려 줌
+  Api.find().then((found) => { if (!found) showError(Api.NO_SERVER); });
 }
 
 init();

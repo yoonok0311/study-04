@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<!-- Created: 2026-09-29 12:57 -->
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>레시피 추천 - 냉장고 레시피 추천</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="container">
+    <header>
+      <h1>냉장고 레시피 추천</h1>
+      <p class="subtitle">1. 냉장고 사진에서 재료 찾기 → <strong>2. 레시피 추천받기</strong></p>
+    </header>
+
+    <!-- 1. 재료와 조건 -->
+    <section class="card" id="setup-section">
+      <div class="section-header">
+        <h2>내 재료 <span class="count" id="ingredient-count"></span></h2>
+        <a class="link" href="index.html">← 재료 다시 인식하기</a>
+      </div>
+      <ul class="chips" id="chips"></ul>
+      <p class="hint left">레시피에 쓰지 않을 재료는 ×로 뺄 수 있습니다.</p>
+
+      <form id="options-form" class="options">
+        <label>인분
+          <select id="opt-servings">
+            <option value="1">1인분</option><option value="2" selected>2인분</option><option value="3">3인분</option>
+            <option value="4">4인분</option><option value="5">5인분</option><option value="6">6인분</option>
+          </select>
+        </label>
+        <label>조리 시간
+          <select id="opt-max_time">
+            <option value="any" selected>상관없음</option><option value="15">15분 이내</option>
+            <option value="30">30분 이내</option><option value="60">60분 이내</option>
+          </select>
+        </label>
+        <label>난이도
+          <select id="opt-difficulty">
+            <option value="any" selected>상관없음</option><option value="쉬움">쉬움</option><option value="보통">보통</option>
+          </select>
+        </label>
+        <label>요리 종류
+          <select id="opt-cuisine">
+            <option value="any" selected>상관없음</option><option value="한식">한식</option><option value="양식">양식</option>
+            <option value="중식">중식</option><option value="일식">일식</option>
+          </select>
+        </label>
+        <label class="wide">피할 재료 <span class="muted">(쉼표로 구분, 예: 새우, 땅콩)</span>
+          <input type="text" id="opt-avoid" maxlength="200" placeholder="알레르기나 싫어하는 재료">
+        </label>
+        <label class="check wide"><input type="checkbox" id="opt-basic_seasonings" checked>
+          기본 양념(소금, 후추, 식용유, 간장, 설탕)은 있다고 보기</label>
+        <label class="check wide"><input type="checkbox" id="opt-only_owned">
+          가진 재료만 사용 (사야 할 재료가 없는 레시피만)</label>
+        <button type="submit" class="btn primary wide" id="recommend-button">레시피 추천받기</button>
+      </form>
+    </section>
+
+    <!-- 2. 진행 상태 -->
+    <section class="card status" id="progress" hidden>
+      <div class="spinner" aria-hidden="true"></div>
+      <p id="progress-text" role="status">레시피를 만드는 중…</p>
+      <button type="button" class="btn" id="cancel-button">취소</button>
+    </section>
+
+    <p class="card error" id="error" role="alert" hidden></p>
+
+    <!-- 3. 추천 목록 -->
+    <section class="card" id="results-section" hidden>
+      <div class="section-header">
+        <h2>추천 레시피</h2>
+        <span class="meta" id="results-meta"></span>
+      </div>
+      <p class="notes" id="results-note" hidden></p>
+      <div class="recipe-list" id="recipe-list"></div>
+      <p class="disclaimer">AI가 만든 레시피입니다. 알레르기와 익힘 정도는 직접 확인해 주세요.</p>
+    </section>
+
+    <!-- 4. 레시피 상세 -->
+    <section class="card" id="detail-section" hidden>
+      <button type="button" class="link-button" id="back-button">← 추천 목록으로</button>
+      <h2 class="detail-title" id="detail-title"></h2>
+      <p class="detail-summary" id="detail-summary"></p>
+      <div class="tags" id="detail-tags"></div>
+
+      <h3>재료 <span class="muted" id="detail-have"></span></h3>
+      <ul class="detail-ingredients" id="detail-ingredients"></ul>
+
+      <h3>조리 순서 <span class="muted">(누르면 완료 표시)</span></h3>
+      <ol class="steps" id="detail-steps"></ol>
+
+      <div class="tips" id="detail-tips" hidden></div>
+      <p class="disclaimer">AI가 만든 레시피입니다. 알레르기와 익힘 정도는 직접 확인해 주세요.</p>
+    </section>
+  </main>
+
+  <template id="recipe-card-template">
+    <article class="recipe-card">
+      <h3 class="recipe-title"></h3>
+      <p class="recipe-summary"></p>
+      <div class="tags"></div>
+      <div class="have">
+        <div class="have-bar"><span></span></div>
+        <span class="have-text"></span>
+      </div>
+      <div class="button-row">
+        <button type="button" class="btn primary open-button">자세히 보기</button>
+        <button type="button" class="btn replace-button">다른 레시피로 바꾸기</button>
+      </div>
+    </article>
+  </template>
+
+  <script src="common.js"></script>
+  <script src="recipes.js"></script>
+</body>
+</html>
