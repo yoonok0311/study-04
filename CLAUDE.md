@@ -14,6 +14,7 @@ VibeCoding 학습 시리즈의 Study-04입니다 (다른 프로젝트: `../study
 - `py test_step2.py`: 2단계 서버 테스트 (가짜 모델 응답으로 조건 필터, 재요청, 모델 전환, 캐시 검사). `--live`는 실제 레시피 생성.
 - `py test_step1.py`: API를 부르지 않는 서버 테스트 (가짜 `chat_events`로 오류 흐름 검사). `--live`를 붙이면 `samples/`의 사진 3장으로 실제 모델을 부릅니다 (무료 호출 한도 사용).
 - 콘솔 한글이 깨지면 `PYTHONIOENCODING=utf-8`을 붙입니다.
+- 배포: Render 무료 웹 서비스. `render.yaml`(Blueprint)이 `requirements.txt`를 설치하고 `gunicorn app:app`으로 띄웁니다. 캐시가 프로세스 메모리에 있어서 워커는 1개(스레드 8개)이고, 재료 인식 재시도가 약 3분까지 걸려서 `--timeout 300`입니다. 키는 Render 환경 변수 `OPENROUTER_API_KEY`로 넣습니다 (`config.get_api_key()`가 환경 변수를 먼저 씀). `app.run`은 로컬 전용이라 `127.0.0.1`에 그대로 둡니다. gunicorn은 Windows에서 동작하지 않으므로 로컬 확인은 `py app.py`로 합니다.
 
 ## 구조
 

@@ -1,0 +1,19 @@
+# Created: 2026-09-29 13:36
+# Render Blueprint: 저장소를 연결하면 이 설정으로 웹 서비스를 만듦
+services:
+  - type: web
+    name: study-04
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    # 워커 1개: 인식/레시피 캐시가 프로세스 메모리에 있어서 워커끼리 나누면 캐시가 안 맞음
+    # 스레드 8개: 요청 하나가 재시도로 몇 분씩 붙잡고 있어도 다른 요청을 받음
+    # timeout 300: 재료 인식 재시도가 최대 약 3분 걸려서 기본값(30초)이면 중간에 끊김
+    startCommand: gunicorn app:app --workers 1 --threads 8 --timeout 300 --bind 0.0.0.0:$PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      # 값은 Render 화면에서 직접 입력 (저장소에 키를 두지 않음)
+      - key: OPENROUTER_API_KEY
+        sync: false

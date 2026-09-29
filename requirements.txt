@@ -1,0 +1,5 @@
+# Created: 2026-09-29 13:36
+# 배포(Render)용 의존성. 로컬에서는 flask, Pillow만 있으면 py app.py로 실행됨 (gunicorn은 Windows에서 동작하지 않음)
+Flask==3.1.3
+Pillow>=9.5,<12
+gunicorn==23.0.0
