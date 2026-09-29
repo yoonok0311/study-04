@@ -15,13 +15,22 @@ function saveStored(key, value) {
   try { sessionStorage.setItem(key, JSON.stringify(value)); return true; } catch (_) { return false; }
 }
 
+// 로컬(파일, 127.0.0.1, localhost)로 열었는지, 배포 주소(Render)로 열었는지
+const IS_LOCAL = location.protocol === "file:" || ["127.0.0.1", "localhost"].includes(location.hostname);
+
 const Api = {
-  // 서버 주소 후보: 같은 출처(py app.py로 연 경우) → 기본 로컬 서버.
-  // html을 파일로 열거나 Live Server 등 다른 포트로 열었을 때도 서버를 찾게 함
-  candidates: (location.protocol === "file:" ? [] : [""]).concat(["http://127.0.0.1:5000", "http://localhost:5000"]),
+  // 서버 주소 후보: 같은 출처(py app.py나 배포 주소로 연 경우) → 기본 로컬 서버.
+  // 로컬에서 html을 파일로 열거나 Live Server 등 다른 포트로 열었을 때도 서버를 찾게 함.
+  // 배포 주소로 열었을 때는 방문자 컴퓨터의 로컬 서버를 찾지 않음
+  candidates: (location.protocol === "file:" ? [] : [""])
+    .concat(IS_LOCAL ? ["http://127.0.0.1:5000", "http://localhost:5000"] : []),
   base: null, // 찾은 서버 주소 ("" = 같은 출처), 못 찾으면 null
-  NO_SERVER: "서버에 연결할 수 없습니다. 터미널에서 study-04 폴더로 이동해 "
-    + "\"py app.py\"를 실행한 뒤, 브라우저에서 http://127.0.0.1:5000 을 열어 주세요.",
+  // 로컬이면 서버 켜는 법을, 배포 주소면 잠시 뒤 다시 시도하라고 안내.
+  // Render 무료 서버는 15분 동안 요청이 없으면 잠들고 깨는 데 30~60초 걸림
+  NO_SERVER: IS_LOCAL
+    ? "서버에 연결할 수 없습니다. 터미널에서 study-04 폴더로 이동해 "
+      + "\"py app.py\"를 실행한 뒤, 브라우저에서 http://127.0.0.1:5000 을 열어 주세요."
+    : "서버에 연결할 수 없습니다. 서버가 잠에서 깨는 중일 수 있으니 1분쯤 뒤 다시 시도해 주세요.",
 
   // AbortSignal.timeout이 없는 브라우저도 있어서 AbortController로 시간 제한
   async probe(base, ms) {
