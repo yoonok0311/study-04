@@ -1,0 +1,27 @@
+#!/bin/sh
+# Created: 2026-09-29 11:51
+# API 키가 커밋되지 않도록 막는 훅. 켜기: git config core.hooksPath .githooks
+
+# 1) .env 파일 자체 (.env.example은 허용)
+env_files=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '(^|/)\.env(\..+)?$' | grep -vE '\.env\.example$')
+if [ -n "$env_files" ]; then
+    echo "커밋 중단: 비밀 정보 파일이 포함되어 있습니다: $env_files" >&2
+    echo "  git restore --staged <파일> 로 빼 주세요." >&2
+    exit 1
+fi
+
+# 2) 새로 추가되는 줄에 OpenRouter 키 형식이 있는지
+if git diff --cached -U0 | grep -E '^\+' | grep -qE 'sk-or-v1-[0-9a-fA-F]{16,}'; then
+    echo "커밋 중단: OpenRouter API 키로 보이는 문자열(sk-or-v1-...)이 있습니다." >&2
+    echo "  키는 .env에만 두고 코드에서는 config.get_api_key()로 불러오세요." >&2
+    exit 1
+fi
+
+# 3) .env에 있는 실제 키 값이 다른 파일에 복사되었는지
+if [ -f .env ]; then
+    key=$(sed -n 's/^OPENROUTER_API_KEY=//p' .env | tr -d '\r\n"'"'")
+    if [ -n "$key" ] && git diff --cached -U0 | grep -E '^\+' | grep -qF "$key"; then
+        echo "커밋 중단: .env의 실제 API 키 값이 커밋 내용에 들어 있습니다." >&2
+        exit 1
+    fi
+fi
