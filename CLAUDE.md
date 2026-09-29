@@ -1,0 +1,24 @@
+# CLAUDE.md
+
+이 파일은 이 저장소에서 코드를 다룰 때 Claude Code(claude.ai/code)가 참고할 지침입니다.
+
+<!-- Created: 2026-09-29 10:57 -->
+
+## 프로젝트 개요
+
+VibeCoding 학습 시리즈의 Study-04입니다 (다른 프로젝트: `../study-01` MNIST 숫자 인식기, `../study-02` 웹 할 일 앱, `../study-03` 한국어 퀴즈 웹 게임). 아직 본격적인 코드는 없고 API 키 설정(`.env`, `config.py`)만 되어 있습니다. 코드, 명령어, 구조가 생기면 이 파일을 갱신합니다.
+
+git 저장소가 아니며 테스트, 린터, 빌드 단계도 아직 없습니다. 공통 규칙(생성 시각 주석, `py` 런처)은 `C:\Users\DY\Desktop\CLAUDE.md`를 따릅니다.
+
+## 비밀 정보
+
+- `.env`에 OpenRouter 키 `OPENROUTER_API_KEY`가 있습니다. 키는 항상 `config.py`의 `get_api_key()`로 불러옵니다 (표준 라이브러리만 사용, `python-dotenv` 미설치). 코드에 직접 적거나, 출력하거나, 브라우저로 전달되는 클라이언트 코드에 넣지 않습니다. 로그에는 `mask(key)`를 씁니다.
+- API 기본 주소는 `config.OPENROUTER_BASE_URL` (`https://openrouter.ai/api/v1`)이고 인증은 `Authorization: Bearer <키>` 헤더입니다.
+- `py config.py`: 키를 출력하지 않고 OpenRouter에 키가 유효한지, 사용액과 한도를 확인합니다.
+- 모델: 텍스트는 `nvidia/nemotron-3-super-120b-a12b:free`(텍스트 전용 추론 모델), 이미지 글자 인식은 `dots-studio/dots-3-note-preview:free`를 씁니다 (처음 정한 `google/gemma-4-31b-it:free`는 공용 한도 429가 계속되어 바꿈). 둘 다 추론 모델이라 추론 토큰도 `max_tokens`에 포함되므로, 한도를 넉넉히(2000) 주지 않으면 `finish_reason=length`와 함께 `content`가 빈 채로 옵니다.
+- `py test_api.py [--text-model ID] [--image-model ID] [--only text|image]`: 텍스트 질문과 이미지 글자 인식을 한 번씩 테스트합니다. 테스트 이미지 `test_image.png`는 매번 Pillow로 새로 그립니다. 무료 모델은 공용 한도(429)나 과부하(502/503)가 잦아서 10/20/40/80초 간격으로 재시도합니다. 제공사 오류는 HTTP 200 응답 본문의 `error`로 오기도 합니다. 이 키는 무료 등급이라 무료 모델을 하루 50회까지 호출할 수 있습니다.
+- `.gitignore`가 `.env`를 제외합니다. 커밋하는 것은 자리표시자만 든 `.env.example`입니다.
+
+## 환경
+
+- Python 3.9.7은 `py`로 실행합니다. Node v16.13.2도 설치되어 있습니다.
